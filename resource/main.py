@@ -1,9 +1,9 @@
 import pygame
 import os
 import copy
-from move_validator import MoveValidator 
-from bot import ChessBot
-from board_wrapper import BoardWrapper
+from core.move_validator import MoveValidator 
+from engine.bot import ChessBot
+from core.board_wrapper import BoardWrapper
 import threading
 
 # Initialize pygame
@@ -33,10 +33,35 @@ pygame.display.set_caption("Chess Board")
 # Path to assets directory
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 
-import pygame
-import os
-
 pygame.mixer.init()     
+
+# Load sẵn âm thanh vào dictionary
+sound_files = {
+    "move": "Move.mp3",
+    "capture": "Capture.mp3",
+}
+
+# Load các âm thanh nếu tồn tại
+sounds = {}
+for key, file_name in sound_files.items():
+    path = os.path.join(ASSETS_DIR, file_name)
+    if os.path.exists(path):
+        try:
+            sounds[key] = pygame.mixer.Sound(path)
+        except Exception as e:
+            print(f"[!] Không thể load âm thanh {key}: {e}")
+    else:
+        print(f"[!] File âm thanh không tồn tại: {path}")
+        
+def manageSound(event):
+    sound = sounds.get(event)
+    if sound:
+        try:
+            sound.play()
+        except Exception as e:
+            print(f"[!] Lỗi khi phát âm thanh '{event}': {e}")
+    else:
+        print(f"[!] Không có âm thanh cho sự kiện '{event}' hoặc chưa được load.")  
 
 # Load chess pieces images
 def load_pieces():
@@ -91,7 +116,7 @@ def highlight_last_move():
     if last_move:
         (start_file, start_rank), (end_file, end_rank) = last_move
         highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-        highlight_surface.fill((100, 200, 255, 100)) 
+        highlight_surface.fill((255, 255, 0, 100)) 
         win.blit(highlight_surface, (start_file * SQUARE_SIZE, start_rank * SQUARE_SIZE))
         win.blit(highlight_surface, (end_file * SQUARE_SIZE, end_rank * SQUARE_SIZE))
 
@@ -232,6 +257,12 @@ def move_piece(start_pos, end_pos):
     initial_board[end_rank][end_file] = piece_moved
     initial_board[start_rank][start_file] = ''
 
+    # Gọi âm thanh
+    if captured_piece != '':
+        manageSound("capture")
+    else:
+        manageSound("move")
+
     # Tốt phong cấp
     if piece_moved[1] == 'P' and (end_rank == 0 or end_rank == 7):
         promoting_pawn = (end_file, end_rank)
@@ -306,46 +337,130 @@ def undo_move():
     move_validator.castling_rights = castling_rights
     move_validator.last_move = last_move
 
+def animate_move(start_sq, end_sq, piece):
+    frames = 10
+    start_x = start_sq[0] * SQUARE_SIZE
+    start_y = start_sq[1] * SQUARE_SIZE
+    end_x = end_sq[0] * SQUARE_SIZE
+    end_y = end_sq[1] * SQUARE_SIZE
+
+    delta_x = (end_x - start_x) / frames
+    delta_y = (end_y - start_y) / frames
+
+    for frame in range(frames + 1):
+        draw_board()
+        current_x = start_x + delta_x * frame
+        current_y = start_y + delta_y * frame
+        piece_img = pieces[f"{'white' if piece[0] == 'w' else 'black'}_{piece[1]}"]
+        win.blit(piece_img, (current_x, current_y))
+        pygame.display.flip()
+        pygame.time.delay(10)
 
 # Main function
 def draw_mode_selection():
-    win.fill((30, 30, 30))
-    title_font = pygame.font.SysFont("Arial", 48)
-    option_font = pygame.font.SysFont("Arial", 36)
+    global bot_enabled
 
-    title = title_font.render("Play Mode:", True, (255, 255, 255))
-    pvp = option_font.render("PvP", True, (255, 255, 255))
-    pve = option_font.render("PvE", True, (255, 255, 255))
+    pygame.font.init()
+    try:
+        title_font = pygame.font.SysFont("Garamond", 52, bold=True)
+        option_font = pygame.font.SysFont("Garamond", 36)
+        color_font = pygame.font.SysFont("Garamond", 30)
+    except:
+        # fallback nếu máy không có Garamond
+        title_font = pygame.font.SysFont("Arial", 48, bold=True)
+        option_font = pygame.font.SysFont("Arial", 32)
+        color_font = pygame.font.SysFont("Arial", 28)
 
-    # Vị trí các nút bấm
-    pvp_rect = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 30, 300, 50)
-    pve_rect = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 + 40, 300, 50)
+    pvp_rect = pygame.Rect(WIDTH // 2 - 160, HEIGHT // 2 - 90, 320, 70)
+    pve_rect = pygame.Rect(WIDTH // 2 - 160, HEIGHT // 2 + 0, 320, 70)
+
+    white_rect = pygame.Rect(WIDTH // 2 - 160, HEIGHT // 2 + 120, 150, 60)
+    black_rect = pygame.Rect(WIDTH // 2 + 10, HEIGHT // 2 + 120, 150, 60)
+
+    choose_color = False
+    player_side = None
+
+    clock = pygame.time.Clock()
+
+    def draw_button(rect, text, font, base_color, hover_color, text_color, mouse_pos):
+        # Kiểm tra hover
+        hovered = rect.collidepoint(mouse_pos)
+
+        # Shadow
+        shadow_rect = rect.move(4, 4)
+        pygame.draw.rect(win, (0, 0, 0, 50), shadow_rect, border_radius=14)
+
+        # Màu nền gradient đơn giản
+        color = hover_color if hovered else base_color
+
+        # Vẽ nút bo góc với màu nền
+        pygame.draw.rect(win, color, rect, border_radius=14)
+
+        # Text
+        label = font.render(text, True, text_color)
+        win.blit(label, (
+            rect.x + (rect.width - label.get_width()) // 2,
+            rect.y + (rect.height - label.get_height()) // 2
+        ))
+
+        return hovered
 
     running = True
     while running:
-        win.fill((30, 30, 30))
-        win.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 100))
+        mouse_pos = pygame.mouse.get_pos()
 
-        # Vẽ nút PvP
-        pygame.draw.rect(win, (70, 130, 180), pvp_rect)
-        win.blit(pvp, (pvp_rect.x + (pvp_rect.width - pvp.get_width()) // 2,
-                       pvp_rect.y + (pvp_rect.height - pvp.get_height()) // 2))
+        # Gradient background
+        for y in range(HEIGHT):
+            ratio = y / HEIGHT
+            r = int(20 + ratio * 50)
+            g = int(20 + ratio * 60)
+            b = int(30 + ratio * 70)
+            pygame.draw.line(win, (r, g, b), (0, y), (WIDTH, y))
 
-        # Vẽ nút PvE
-        pygame.draw.rect(win, (70, 130, 180), pve_rect)
-        win.blit(pve, (pve_rect.x + (pve_rect.width - pve.get_width()) // 2,
-                       pve_rect.y + (pve_rect.height - pve.get_height()) // 2))
+        # Tiêu đề
+        title = title_font.render("Select Game Mode", True, (230, 230, 230))
+        win.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 180))
 
-        pygame.display.flip()
+        # Line divider
+        pygame.draw.line(win, (100, 100, 100), (WIDTH // 2 - 170, HEIGHT // 2 - 100), (WIDTH // 2 + 170, HEIGHT // 2 - 100), 2)
+
+        # Nút PvP và PvE
+        pvp_hover = draw_button(pvp_rect, "Player vs Player", option_font, (70, 130, 200), (90, 170, 250), (255, 255, 255), mouse_pos)
+        pve_hover = draw_button(pve_rect, "Player vs Bot", option_font, (80, 160, 110), (110, 200, 130), (255, 255, 255), mouse_pos)
+
+        if choose_color:
+            label = color_font.render("Choose Your Side:", True, (220, 220, 220))
+            win.blit(label, (WIDTH // 2 - label.get_width() // 2, HEIGHT // 2 + 80))
+
+            white_hover = draw_button(white_rect, "White", option_font, (240, 240, 240), (255, 255, 255), (20, 20, 20), mouse_pos)
+            black_hover = draw_button(black_rect, "Black", option_font, (40, 40, 40), (70, 70, 70), (240, 240, 240), mouse_pos)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if pvp_rect.collidepoint(event.pos):
-                    return 'PvP'
-                elif pve_rect.collidepoint(event.pos):
-                    return 'PvE'
+                if not choose_color:
+                    if pvp_hover:
+                        bot_enabled = False
+                        player_side = None
+                        running = False
+                    elif pve_hover:
+                        choose_color = True
+                else:
+                    if white_hover:
+                        player_side = 'w'
+                        bot_enabled = True
+                        running = False
+                    elif black_hover:
+                        player_side = 'b'
+                        bot_enabled = True
+                        running = False
+
+        pygame.display.update()
+        clock.tick(60)
+
+    return 'PvE' if player_side else 'PvP', player_side
 
 def save_state():
     history_stack.append({
@@ -395,11 +510,13 @@ def main():
     global selected_piece, selected_pos, turn, valid_moves, promoting_pawn, initial_board, game_over, winner, last_move, bot_thinking
     global game_mode, bot
 
-    game_mode = draw_mode_selection()
+    game_mode, player_side = draw_mode_selection()
     if game_mode == 'PvE':
         bot = ChessBot()
+        turn = (player_side != 'b')  # nếu chọn trắng thì white đi trước
     else:
         bot = None
+        turn = True
 
     last_move = None
     
@@ -513,6 +630,7 @@ def main():
                         valid_moves = move_validator.get_all_valid_moves(selected_pos)
                 else:
                     if (file, rank) in valid_moves:
+                        animate_move(selected_pos, (file, rank), selected_piece)
                         move_piece(selected_pos, (file, rank))
                         if not promoting_pawn:
                             turn = not turn
