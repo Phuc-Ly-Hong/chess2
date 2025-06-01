@@ -28,7 +28,10 @@ class BitboardUtility:
         lsb_index = (bb & -bb).bit_length() - 1
         bitboard &= bitboard - 1
         return lsb_index, bitboard
-
+    
+    @staticmethod
+    def count_bits(bitboard):
+        return bin(bitboard).count('1')
 
     @staticmethod
     def set_square(bitboard, square):

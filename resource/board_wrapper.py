@@ -1,12 +1,13 @@
 import numpy as np
 from bitboard_utility import BitboardUtility
+from magic_bitboards import get_bishop_attacks, get_rook_attacks
 import copy
 
 class BoardWrapper:
     def __init__(self, board_array, castling_rights, turn, last_move):
         self.board_array = [row[:] for row in board_array]
         self.castling_rights = castling_rights
-        self.turn = 'w' if turn else 'b'
+        self.turn = turn
         self.last_move = last_move
         self.en_passant_square = -1
         self._init_bitboards()
@@ -98,7 +99,6 @@ class BoardWrapper:
         new_board = [row[:] for row in self.board_array]
         castling = self.castling_rights
         last = (move[0], move[1])
-        turn = self.turn == 'w'
 
         start = move[0]
         target = move[1]
@@ -136,8 +136,11 @@ class BoardWrapper:
         # Xoá quân ở ô xuất phát
         new_board[sr][sf] = ""
 
+        new_turn = 'b' if self.turn == 'w' else 'w'
+
         # Tạo đối tượng mới và cập nhật lại bitboards
-        wrapped = BoardWrapper(new_board, castling, not turn, last)
+        wrapped = BoardWrapper(new_board, castling, new_turn, last)
+        print(f"[DEBUG] make_copy_and_apply(): self.turn = {self.turn}, new turn = {new_turn}")
         wrapped._init_bitboards()  # Cập nhật lại bitboards sau khi thực hiện nước đi
         return wrapped
 
@@ -211,6 +214,32 @@ class BoardWrapper:
         if target_piece and target_piece[0] != moving_piece[0]:
             return True  # có quân đối phương ở ô đích
         return False
+
+    def attackers_to(self, sq, color):
+        attackers = 0
+        occupied = self.get_occupied(0) | self.get_occupied(1)
+
+        # Tốt
+        pawn_attacks = BitboardUtility.pawn_attacks(1 - color,sq)  # 1 - color vì tấn công từ góc nhìn của đối phương
+        attackers |= pawn_attacks & self.get_piece_bitboard(color, 1)
+
+        # Mã
+        knight_attacks = BitboardUtility.KnightAttacks[sq]
+        attackers |= knight_attacks & self.get_piece_bitboard(color, 2)
+
+        # Tượng
+        bishop_attacks = get_bishop_attacks(sq, occupied)
+        attackers |= bishop_attacks & self.get_piece_bitboard(color, 3)
+
+        # Xe
+        rook_attacks = get_rook_attacks(sq, occupied)
+        attackers |= rook_attacks & self.get_piece_bitboard(color, 4)
+
+        # Hậu (kết hợp tượng và xe)
+        queen_attacks = bishop_attacks | rook_attacks
+        attackers |= queen_attacks & self.get_piece_bitboard(color, 5)
+
+        return attackers
 
 
 

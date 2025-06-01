@@ -95,7 +95,6 @@ def highlight_last_move():
         win.blit(highlight_surface, (start_file * SQUARE_SIZE, start_rank * SQUARE_SIZE))
         win.blit(highlight_surface, (end_file * SQUARE_SIZE, end_rank * SQUARE_SIZE))
 
-
 def draw_board():
     for file in range(8):
         for rank in range(8):

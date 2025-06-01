@@ -33,6 +33,25 @@ class PrecomputedMoveData:
     @staticmethod
     def coord(index):
         return index % 8, index // 8
+    
+    @staticmethod
+    def get_direction(from_sq, to_sq):
+        diff = to_sq - from_sq
+        directions = {
+            1: 0,    # right
+            -1: 1,   # left
+            8: 2,    # down
+            -8: 3,   # up
+            9: 4,    # down-right
+            -9: 5,   # up-left
+            7: 6,    # down-left
+            -7: 7    # up-right
+        }
+        for offset, dir_idx in directions.items():
+            for i in range(1, 8):
+                if from_sq + i * offset == to_sq:
+                    return offset
+        return 0  # fallback
 
     @staticmethod
     def initialize():

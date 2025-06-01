@@ -2,8 +2,16 @@ import numpy as np
 from bitboard_utility import BitboardUtility
 
 class Bits:
-    FileA = 0x0101010101010101
-
+    FileMasks = [
+        0x0101010101010101,  # Cột A
+        0x0202020202020202,  # Cột B
+        0x0404040404040404,  # Cột C
+        0x0808080808080808,  # Cột D
+        0x1010101010101010,  # Cột E
+        0x2020202020202020,  # Cột F
+        0x4040404040404040,  # Cột G
+        0x8080808080808080   # Cột H
+    ]
     WhiteKingsideMask = (1 << 5) | (1 << 6)
     BlackKingsideMask = (1 << 61) | (1 << 62)
 
@@ -27,9 +35,9 @@ class Bits:
     @staticmethod
     def init():
         for i in range(8):
-            Bits.FileMask[i] = Bits.FileA << i
-            left = Bits.FileA << (i - 1) if i > 0 else 0
-            right = Bits.FileA << (i + 1) if i < 7 else 0
+            Bits.FileMask[i] = Bits.FileMasks[0] << i
+            left = Bits.FileMasks[0] << (i - 1) if i > 0 else 0
+            right = Bits.FileMasks[0] << (i + 1) if i < 7 else 0
             Bits.AdjacentFileMasks[i] = left | right
 
         for i in range(8):
@@ -40,7 +48,7 @@ class Bits:
             file = square % 8
             rank = square // 8
 
-            adjacent_files = Bits.FileA << max(0, file - 1) | Bits.FileA << min(7, file + 1)
+            adjacent_files = (Bits.FileMasks[0] << max(0, file - 1)) | (Bits.FileMasks[0] << min(7, file + 1))
             white_forward_mask = ~((1 << (8 * (rank + 1))) - 1) & 0xFFFFFFFFFFFFFFFF
             black_forward_mask = ((1 << (8 * rank)) - 1)
 
@@ -61,5 +69,4 @@ class Bits:
 
         for i in range(64):
             Bits.KingSafetyMask[i] = BitboardUtility.KingMoves[i] | (1 << i)
-
 Bits.init()

@@ -34,7 +34,7 @@ class ChessBot:
                 self.last_move = move
 
         if not move:
-            move = self.searcher.search(board_wrapper, time_limit=7.0)
+            move = self.searcher.search(board_wrapper, time_limit=10.0)
             self.last_move = move
 
         self.en_passant_capture = None

@@ -43,28 +43,25 @@ class MoveGenerator:
         print("[DEBUG] Goi generate_pawn_moves()")
         self.generate_pawn_moves()
 
-        # Lọc các nước đi khiến vua bị chiếu
-        # Kiểm tra nếu đang bị chiếu
-        king_sq_current = board.king_square(0 if self.friendly_colour == 'w' else 1)
-        in_check = king_sq_current != -1 and self.is_square_attacked(board, king_sq_current, self.opponent_colour)
-
+        # ✅ Lọc nước đi không khiến vua bị chiếu
         legal_moves = []
-        current_king_sq = board.king_square(0 if self.friendly_colour == 'w' else 1)
-        in_check = current_king_sq != -1 and self.is_square_attacked_simple(board, current_king_sq, self.opponent_colour)
-        
+        friendly_color = self.friendly_colour
+        opponent_color = self.opponent_colour
+
+        print(f"[DEBUG] Tong so nuoc sinh ra truoc loc: {len(self.moves)}")
+
         for move in self.moves:
-            # Tạo bàn cờ mới sau nước đi
             new_board = board.make_copy_and_apply(move)
-            
-            # Xác định vị trí vua sau nước đi
-            moved_king_sq = new_board.king_square(0 if new_board.turn == 'w' else 1)
-            if moved_king_sq == -1:  # Không có vua (không thể xảy ra)
-                continue
-                
-            # Kiểm tra nếu vua bị chiếu sau nước đi
-            if not self.is_square_attacked_simple(new_board, moved_king_sq, 'b' if new_board.turn == 'w' else 'w'):
+            print(f"[DEBUG] generate_moves(): turn = {board.turn}")
+            king_sq = new_board.king_square(0 if friendly_color == 'w' else 1)
+
+            if king_sq == -1:
+                continue  # Không có vua → bỏ
+
+            if not self.is_square_attacked_simple(new_board, king_sq, opponent_color):
                 legal_moves.append(move)
 
+        print(f"[DEBUG] So nuoc hop le sau loc: {len(legal_moves)}")
         print("[DEBUG] Ket thuc generate_moves()")
         return legal_moves
 
@@ -321,27 +318,31 @@ class MoveGenerator:
         color_int = 0 if attacker_color == 'w' else 1
         occupied = board.get_all_occupied()
         
-        # Knight attacks
+        # Knight attacks (8 hướng hình chữ L)
         if BitboardUtility.KnightAttacks[square] & board.get_knights(color_int):
             return True
             
-        # Pawn attacks
-        pawn_attacks = BitboardUtility.pawn_attacks(1 << square, attacker_color == 'w')
-        if pawn_attacks & board.get_pawn_bitboard(color_int):
+        # Pawn attacks (phải xác định đúng hướng tấn công)
+        if attacker_color == 'w':
+            # Tốt trắng tấn công từ dưới lên (2 hướng chéo)
+            pawn_attacks = (BitboardUtility.WhitePawnAttacks[square] & 
+                            board.get_pawn_bitboard(color_int))
+        else:
+            # Tốt đen tấn công từ trên xuống (2 hướng chéo)
+            pawn_attacks = (BitboardUtility.BlackPawnAttacks[square] & 
+                            board.get_pawn_bitboard(color_int))
+        
+        if pawn_attacks:
             return True
             
-        # King attacks
-        if BitboardUtility.KingMoves[square] & board.get_king(color_int):
+        # Rook/Queen attacks (dọc + ngang)
+        rook_queen = board.get_rooks(color_int) | board.get_queens(color_int)
+        if get_rook_attacks(square, occupied) & rook_queen:
             return True
             
-        # Rook/Queen attacks
-        rook_attacks = get_rook_attacks(square, occupied)
-        if rook_attacks & (board.get_rooks(color_int) | board.get_queens(color_int)):
-            return True
-            
-        # Bishop/Queen attacks
-        bishop_attacks = get_bishop_attacks(square, occupied)
-        if bishop_attacks & (board.get_bishops(color_int) | board.get_queens(color_int)):
+        # Bishop/Queen attacks (chéo)
+        bishop_queen = board.get_bishops(color_int) | board.get_queens(color_int)
+        if get_bishop_attacks(square, occupied) & bishop_queen:
             return True
             
         return False
