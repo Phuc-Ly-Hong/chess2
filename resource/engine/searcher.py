@@ -2,10 +2,10 @@ import time
 from typing import List, Tuple, Optional
 from core.move_generator import MoveGenerator
 from core.board_wrapper import BoardWrapper
-from evaluation import Evaluation
-from repetition_table import RepetitionTable
-from zobrist import ZobristHasher
-from move_odering import MoveOrdering
+from engine.evaluation import Evaluation
+from engine.repetition_table import RepetitionTable
+from engine.zobrist import ZobristHasher
+from engine.move_odering import MoveOrdering
 
 class Search:
     def __init__(self):

@@ -1,10 +1,10 @@
 import numpy as np
-from piece_square_table import PieceSquareTable
-from precomputed_evaluation_data import OrthogonalDistance, CentreManhattanDistance ,PawnShieldSquaresWhite, PawnShieldSquaresBlack
+from engine.piece_square_table import PieceSquareTable
+from engine.precomputed_evaluation_data import OrthogonalDistance, CentreManhattanDistance ,PawnShieldSquaresWhite, PawnShieldSquaresBlack
 from core.bitboard import Bits
 from core.move_generator import MoveGenerator
 from core.magic_bitboards import get_rook_attacks, get_bishop_attacks
-from precomputed_move_data import PrecomputedMoveData
+from engine.precomputed_move_data import PrecomputedMoveData
 from core.bitboard_utility import BitboardUtility
 
 PAWN_VALUE = 100
@@ -33,9 +33,12 @@ class EvaluationData:
         self.tropism = 0 
         self.center_control = 0
         self.piece_protection = 0
+        self.development_penalty = 0
+        self.threats = 0
 
     def total(self):
-        return (self.material + self.pst + self.mopup + self.pawns + self.shield + self.files + self.mobility+self.tropism+ self.center_control+self.piece_protection)
+        return (self.material + self.pst + self.mopup + self.pawns + self.shield + self.files + self.mobility+self.tropism+ 
+                self.center_control+self.piece_protection+self.development_penalty+self.threats)
 
 class MaterialInfo:
     def __init__(self, board, color):
@@ -77,8 +80,8 @@ class Evaluation:
         white_eval.mopup = self.mopup_eval(True, white_material, black_material)
         black_eval.mopup = self.mopup_eval(False, black_material, white_material)
 
-        white_eval.pawns = self.evaluate_pawns(0)
-        black_eval.pawns = self.evaluate_pawns(1)
+        white_eval.pawns = self.evaluate_pawns(0, white_material.endgameT)
+        black_eval.pawns = self.evaluate_pawns(1, black_material.endgameT)
 
         white_eval.shield = self.king_pawn_shield(0, black_material, black_eval.pst)
         black_eval.shield = self.king_pawn_shield(1, white_material, white_eval.pst)
@@ -98,6 +101,13 @@ class Evaluation:
         white_eval.piece_protection = self.evaluate_piece_protection(0, white_material.endgameT)
         black_eval.piece_protection = self.evaluate_piece_protection(1, black_material.endgameT)
 
+        white_eval.pst += self.evaluate_development_penalty(0)
+        black_eval.pst += self.evaluate_development_penalty(1)
+
+        white_eval.pst += self.evaluate_threats(0, white_material.endgameT)
+        black_eval.pst += self.evaluate_threats(1, black_material.endgameT)
+
+
         # Bishop Pair Bonus
         if white_material.bishops >= 2:
             white_eval.material += BISHOP_PAIR_BONUS
@@ -107,7 +117,7 @@ class Evaluation:
         total = (white_eval.total() - black_eval.total())
         return total if board.is_white_to_move() else -total
 
-    def evaluate_pawns(self, color):
+    def evaluate_pawns(self, color, endgameT):
         pawns = self.board.get_pawn_bitboard(color)
         total = 0
         for sq in range(64):
@@ -117,7 +127,9 @@ class Evaluation:
             file = sq % 8
             if (pawns & Bits.AdjacentFileMasks[file]) == 0:
                 num = bin(pawns).count('1')
-                total += isolated_pawn_penalty_by_count[num]
+                penalty = isolated_pawn_penalty_by_count[num]
+                total += round(penalty * endgameT)  # Chỉ trừ nhiều khi về cuối
+
 
             forward = Bits.WhiteForwardFileMask[sq] if color == 0 else Bits.BlackForwardFileMask[sq]
             passed_mask = forward | Bits.AdjacentFileMasks[file]
@@ -125,7 +137,8 @@ class Evaluation:
 
             if (enemy_pawns & passed_mask) == 0:
                 rank = sq // 8 if color == 0 else 7 - (sq // 8)
-                total += passed_pawn_bonuses[rank]
+                bonus = passed_pawn_bonuses[rank]
+                total += round(bonus * endgameT)
 
         return total
 
@@ -349,4 +362,97 @@ class Evaluation:
                         bonus += protection_score * protection_weights[pt] * (1 - 0.5 * endgameT)
 
         return bonus
+    
+    def evaluate_development_penalty(self, color):
+        penalty = 0
+
+        undeveloped_squares = [57, 62, 58, 61] if color == 0 else [1, 6, 2, 5]  # b1/g1/c1/f1 hoặc b8/g8/c8/f8
+        minor_piece_types = [2, 3]  # Knight, Bishop
+
+        for sq in undeveloped_squares:
+            for pt in minor_piece_types:
+                if ((self.board.get_piece_bitboard(color, pt) >> sq) & 1):
+                    penalty += 10  
+
+        # Hậu chưa rời khỏi d1/d8
+        queen_start_sq = 3 if color == 0 else 59
+        if ((self.board.get_piece_bitboard(color, 5) >> queen_start_sq) & 1):
+            penalty += 5  
+
+        # Xe chưa kết nối
+        middle_files_mask = sum([Bits.FileMasks[i] for i in range(1, 7)])  # Cột b-g
+        occupied = self.board.get_occupied(color)
+        king_sq = self.board.king_square(color)
+        if (color == 0 and king_sq == 4) or (color == 1 and king_sq == 60):
+            if occupied & middle_files_mask:
+                penalty += 15  
+
+        return -penalty
+    
+    def evaluate_threats(self, color, endgameT):
+        if self.board is None:
+            return 0
+
+        bonus = 0
+        enemy_color = 1 - color
+
+        # Trọng số theo loại quân bị đe dọa (pawn, knight, bishop, rook, queen)
+        threat_weights = {1: 10, 2: 20, 3: 25, 4: 30, 5: 50}
+
+        own_occ = self.board.get_occupied(color)
+        enemy_occ = self.board.get_occupied(enemy_color)
+
+        move_gen = MoveGenerator()
+        move_gen.board = self.board
+        move_gen.init_state()
+        move_gen.calculate_attack_data()
+
+        # Duyệt từng loại quân (pawn đến queen)
+        for pt in range(1, 6):
+            pieces = self.board.get_piece_bitboard(color, pt)
+            for from_sq in BitboardUtility.iter_bits(pieces):
+                # Bỏ qua quân bị ghim
+                if move_gen.is_pinned(from_sq):
+                    continue
+
+                # Lấy các ô bị quân này đe dọa
+                if pt == 1:  # Pawn
+                    attacks = BitboardUtility.WhitePawnAttacks[from_sq] if color == 0 else BitboardUtility.BlackPawnAttacks[from_sq]
+                elif pt == 2:  # Knight
+                    attacks = BitboardUtility.KnightAttacks[from_sq]
+                elif pt == 3:  # Bishop
+                    attacks = get_bishop_attacks(from_sq, own_occ | enemy_occ)
+                elif pt == 4:  # Rook
+                    attacks = get_rook_attacks(from_sq, own_occ | enemy_occ)
+                elif pt == 5:  # Queen
+                    attacks = get_bishop_attacks(from_sq, own_occ | enemy_occ) | get_rook_attacks(from_sq, own_occ | enemy_occ)
+                else:
+                    continue
+
+                # Chỉ xét những ô đang có quân địch
+                attacks &= enemy_occ
+
+                for to_sq in BitboardUtility.iter_bits(attacks):
+                    enemy_piece = self.board.get_piece(to_sq)
+                    if enemy_piece is None or enemy_piece[0] != enemy_color:
+                        continue
+
+                    enemy_pt = self.board.get_piece_type(to_sq)
+                    if enemy_pt == 0:
+                        continue  # Không tính vua
+
+                    # Nếu quân bị tấn công không được bảo vệ → bonus
+                    defenders = self.board.attackers_to(to_sq, enemy_color) & enemy_occ
+                    if defenders == 0:
+                        threat_bonus = threat_weights.get(enemy_pt, 0)
+                        threat_bonus *= (1 + 0.5 * endgameT)
+                        bonus += threat_bonus
+
+        return bonus
+
+
+
+
+
+
 

@@ -1,8 +1,8 @@
-from bitboard_utility import BitboardUtility
-from bitboard import Bits
-from magic_bitboards import get_rook_attacks, get_bishop_attacks, get_slider_attacks
+from core.bitboard_utility import BitboardUtility
+from core.bitboard import Bits
+from core.magic_bitboards import get_rook_attacks, get_bishop_attacks, get_slider_attacks
 from engine.precomputed_move_data import PrecomputedMoveData
-from board_wrapper import BoardWrapper
+from core.board_wrapper import BoardWrapper
 
 class MoveGenerator:
     MaxMoves = 218

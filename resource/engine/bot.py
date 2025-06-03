@@ -1,6 +1,6 @@
 from engine.searcher import Search
 from core.board_wrapper import BoardWrapper
-from opening_book import OpeningBook
+from engine.opening_book import OpeningBook
 
 class ChessBot:
     def __init__(self):

@@ -1,6 +1,6 @@
 import numpy as np
-from bitboard_utility import BitboardUtility
-from magic_bitboards import get_bishop_attacks, get_rook_attacks
+from core.bitboard_utility import BitboardUtility
+from core.magic_bitboards import get_bishop_attacks, get_rook_attacks
 import copy
 
 class BoardWrapper:
@@ -191,7 +191,7 @@ class BoardWrapper:
         return result
     
     def move_gives_check(self, move):
-        from move_generator import MoveGenerator
+        from core.move_generator import MoveGenerator
         applied_board = self.make_copy_and_apply(move)
 
         # Vì turn đã bị đảo sau khi đi nước đó → kẻ vừa bị chiếu là bên kia
@@ -210,7 +210,7 @@ class BoardWrapper:
         return is_attacked
 
     def does_move_block_check(self, move):
-        from move_generator import MoveGenerator
+        from core.move_generator import MoveGenerator
         my_color = 0 if self.turn == 'w' else 1
         king_sq = self.king_square(my_color)
         if king_sq == -1:

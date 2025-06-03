@@ -1,5 +1,5 @@
 import numpy as np
-from bitboard_utility import BitboardUtility
+from core.bitboard_utility import BitboardUtility
 
 class Bits:
     FileMasks = [

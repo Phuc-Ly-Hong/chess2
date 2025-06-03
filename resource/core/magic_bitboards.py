@@ -1,5 +1,5 @@
 import numpy as np
-from bitboard_utility import BitboardUtility
+from core.bitboard_utility import BitboardUtility
 
 # Magic data loaded from PrecomputedMagics.cs
 RookShifts = [52, 52, 52, 52, 52, 52, 52, 52, 53, 53, 53, 54, 53, 53, 54, 53,
