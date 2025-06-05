@@ -45,11 +45,13 @@ Sau khi cài đặt đầy đủ các thư viện, bạn làm theo các bước 
     - Click chuột để chọn một trong hai chế độ:
       - 🧑‍🤝‍🧑 Người vs Người
       - 🤖 Người vs Máy
+        
 ![image](https://github.com/user-attachments/assets/fb3b8230-39e2-4977-b1b8-cb64a9afe115)
 
 4. Nếu chọn **Người vs Máy**, bạn sẽ được chọn **màu quân**:
     - Click để chọn chơi quân **Trắng** hoặc **Đen**
     - Bot sẽ chơi bên còn lại
+      
 ![image](https://github.com/user-attachments/assets/811554cd-5fd2-4f72-8ef5-ee4b8b959be3)
 
 5. **Giao diện bàn cờ sẽ hiển thị** sau khi chọn xong:
@@ -58,6 +60,7 @@ Sau khi cài đặt đầy đủ các thư viện, bạn làm theo các bước 
     - Click vào ô đích để di chuyển quân
     - Nếu nước đi không hợp lệ, chương trình sẽ không thực hiện và yêu cầu bạn chọn lại
     - ấn phím u trên bàn phim để có thể undo lại nước đi của mình
+   
 ![image](https://github.com/user-attachments/assets/cf29b582-9335-45f5-b5ec-9e4463ed3c1d)
 
 ## Thành viên nhóm
